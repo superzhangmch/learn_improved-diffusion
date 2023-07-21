@@ -415,7 +415,8 @@ class UNetModel(nn.Module):
 
         self.output_blocks = nn.ModuleList([])
         for level, mult in list(enumerate(channel_mult))[::-1]:
-            for i in range(num_res_blocks + 1):
+            for i in range(num_res_blocks + 1): # 为啥range +1:在UNet下降阶段，downsample操作是作为独立单元塞给了self.input_blocks的，
+                                                # 而unet上升阶段要和下降阶段作skip连接，则需要一一对应. 故这里多出一个，为了对应那个downsample操作
                 layers = [
                     ResBlock(
                         ch + input_block_chans.pop(),
@@ -499,7 +500,7 @@ class UNetModel(nn.Module):
             hs.append(h)
         h = self.middle_block(h, emb)
         for module in self.output_blocks:
-            cat_in = th.cat([h, hs.pop()], dim=1)
+            cat_in = th.cat([h, hs.pop()], dim=1) # 最原始的UNet paper中，就用的concat
             h = module(cat_in, emb)
         h = h.type(x.dtype)
         return self.out(h)
