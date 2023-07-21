@@ -19,6 +19,9 @@ from .nn import (
     checkpoint,
 )
 
+'''
+关于这个文件：在《diffusions beat gans》, <<stable diffusion>>等中，都是从《improved DDPM》的这个文件，一路改过去的
+'''
 
 class TimestepBlock(nn.Module):
     """
@@ -158,6 +161,14 @@ class ResBlock(TimestepBlock):
             zero_module(
                 conv_nd(dims, self.out_channels, self.out_channels, 3, padding=1)
             ),
+            # 为什么用zero_module:  首先 zero_module 干的事是把上一层的weight置0. 为什么要置零，见:
+            #       https://discuss.pytorch.org/t/why-would-someone-zero-out-the-parameters-of-a-module-in-the-constructor/157148
+            #       里面提到 <<Fixup initialization>>: 怎样不使用BatchNorm，而只靠恰当位置作0初始化即可训练residual结构
+            #       zero_module 这样操作，会把residual分支初始化为0，使得在初始状态residual结构是仿佛不存在的. 最终会使得均值方差保持较好，故而有用
+            # 在Unet的最后一层，也用了它. 也是与<<fixup>>中提到的有关吗(fixup一文中让把classification层也置零)
+            # 另外：为啥《improved DDPM》一文要这样做，也只是继承前人而已。 因为下面链接中，<<improved DDPM>>作者提到<<DDPM>>即这样操作的：
+            #       https://github.com/openai/guided-diffusion/issues/21
+            #       《ddpm》这样做的出处：https://github.com/hojonathanho/diffusion/blob/1e0dceb3b3495bbe19116a5e1b3596cd0706c543/diffusion_tf/models/unet.py#L53
         )
 
         if self.out_channels == channels:
@@ -186,7 +197,7 @@ class ResBlock(TimestepBlock):
         emb_out = self.emb_layers(emb).type(h.dtype)
         while len(emb_out.shape) < len(h.shape):
             emb_out = emb_out[..., None]
-        if self.use_scale_shift_norm:
+        if self.use_scale_shift_norm: # <<tryonDiffusion>>中提到的FiLM，大约就对应的是这里的这个操作
             out_norm, out_rest = self.out_layers[0], self.out_layers[1:]
             scale, shift = th.chunk(emb_out, 2, dim=1)
             h = out_norm(h) * (1 + scale) + shift
@@ -434,6 +445,9 @@ class UNetModel(nn.Module):
             normalization(ch),
             SiLU(),
             zero_module(conv_nd(dims, model_channels, out_channels, 3, padding=1)),
+            # 关于网络最后一层的0初始化，除了《fixup initialize》外，下面链接中也提到有这样的操作：
+            #     https://zhuanlan.zhihu.com/p/378418174
+            #     https://www.quora.com/Why-does-initializing-the-last-layer-of-CNN-as-zeros-lead-to-a-better-initial-condition-for-optimization
         )
 
     def convert_to_fp16(self):
