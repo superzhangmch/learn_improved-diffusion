@@ -386,7 +386,7 @@ class UNetModel(nn.Module):
                     )
                 self.input_blocks.append(TimestepEmbedSequential(*layers))
                 input_block_chans.append(ch)
-            if level != len(channel_mult) - 1:
+            if level != len(channel_mult) - 1: # 注意最后一个level结束的时候，不作downsample，所以middle_block的分辨率和其前后最紧邻block的分辨率是一样的。（这样看好像middle_block没有必要了。但是其前后block参与skip connection, 而middle_block不参与。否则真没存在必要）
                 self.input_blocks.append(
                     TimestepEmbedSequential(Downsample(ch, conv_resample, dims=dims))
                 )
