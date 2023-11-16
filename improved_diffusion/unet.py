@@ -21,6 +21,7 @@ from .nn import (
 
 '''
 关于这个文件：在《diffusions beat gans》, <<stable diffusion>>等中，都是从《improved DDPM》的这个文件，一路改过去的
+另外，本文件对应的Unet实现方式，其实是从原始tensorflow版的DDPM实现（https://github.com/hojonathanho/diffusion）改过去的，基本结构是一模一样的。
 '''
 
 class TimestepBlock(nn.Module):
@@ -392,7 +393,7 @@ class UNetModel(nn.Module):
                 )
                 input_block_chans.append(ch)
                 ds *= 2
-
+        # 注意，self.input_block, self.middle_block, self.output_block和https://github.com/hojonathanho/diffusion的原始实现，其实一模一样
         self.middle_block = TimestepEmbedSequential(
             ResBlock(
                 ch,
