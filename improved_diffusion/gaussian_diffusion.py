@@ -32,6 +32,7 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         beta_end = scale * 0.02
         # x_t = sqrt(alpha_t_bar)*x0 + sqrt(1-alpha_t_bar)*epsilon
         # a_t_bar = prod(a_s) = prod(1-beta_s)
+        # 注意beta_t是x_t->x_t_1的单步扩散的参数
         # beta_t: 线性变化且很小，导致t>0.5后 alpha_t_bar 变化很小，《https://arxiv.org/pdf/2102.09672》图5
         return np.linspace(
             beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
