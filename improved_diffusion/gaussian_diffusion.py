@@ -30,10 +30,16 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         scale = 1000 / num_diffusion_timesteps
         beta_start = scale * 0.0001
         beta_end = scale * 0.02
+        # x_t = sqrt(alpha_t_bar)*x0 + sqrt(1-alpha_t_bar)*epsilon
+        # a_t_bar = prod(a_s) = prod(1-beta_s)
+        # beta_t: 线性变化且很小，导致t>0.5后 alpha_t_bar 变化很小，《https://arxiv.org/pdf/2102.09672》图5
         return np.linspace(
             beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
         )
     elif schedule_name == "cosine":
+        # 希望 x_t = cos(t)*x0 + sin(t)*epsilon 形式，即希望alpha_t_bar = cos^2(..)
+        # 为了与 schedule_name == "linear" 保持代码一致性，因此要反解出beta_t. 
+        # 因此注意：schedulere是线性还是cosine，分别指的不同东西：linear指的{beta_t}, cosine指的是{sqrt(alpha_t_bar)}
         return betas_for_alpha_bar(
             num_diffusion_timesteps,
             lambda t: math.cos((t + 0.008) / 1.008 * math.pi / 2) ** 2,
