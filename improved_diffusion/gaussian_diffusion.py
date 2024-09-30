@@ -278,7 +278,7 @@ class GaussianDiffusion:
                 )
                 max_log = _extract_into_tensor(np.log(self.betas), t, x.shape)
                 # The model_var_values is [-1, 1] for [min_var, max_var].
-                frac = (model_var_values + 1) / 2
+                frac = (model_var_values + 1) / 2 # 从而 frac = 0 .. 1。但是并不是一定在0-1之间。
                 model_log_variance = frac * max_log + (1 - frac) * min_log
                 model_variance = th.exp(model_log_variance)
         else:
@@ -646,7 +646,7 @@ class GaussianDiffusion:
                 yield out
                 img = out["sample"]
 
-    def _vb_terms_bpd(
+    def _vb_terms_bpd( # 变分bound for bits per dim
         self, model, x_start, x_t, t, clip_denoised=True, model_kwargs=None
     ):
         """
@@ -659,26 +659,26 @@ class GaussianDiffusion:
                  - 'output': a shape [N] tensor of NLLs or KLs.
                  - 'pred_xstart': the x_0 predictions.
         """
-        true_mean, _, true_log_variance_clipped = self.q_posterior_mean_variance(
+        true_mean, _, true_log_variance_clipped = self.q_posterior_mean_variance( # q(x_{t-1} | x_t, x_0) 的均值与方差
             x_start=x_start, x_t=x_t, t=t
         )
-        out = self.p_mean_variance(
+        out = self.p_mean_variance( # model预测的 mean 与 variance
             model, x_t, t, clip_denoised=clip_denoised, model_kwargs=model_kwargs
         )
-        kl = normal_kl(
+        kl = normal_kl( # 两个正态分布的 KL 散度
             true_mean, true_log_variance_clipped, out["mean"], out["log_variance"]
         )
-        kl = mean_flat(kl) / np.log(2.0)
-
-        decoder_nll = -discretized_gaussian_log_likelihood(
-            x_start, means=out["mean"], log_scales=0.5 * out["log_variance"]
-        )
+        kl = mean_flat(kl) / np.log(2.0) # 变成 shape = [bs, 1], 为啥除log_e(2)？因为当前函数是计算“bits per dim”的，所以要把log_e X换成 log_2 X, 而 log_e X / log_e 2 = log_2 X。
+        # kl: for t != 0
+        
+        # decoder_nll: for t == 0: 
+        decoder_nll = -discretized_gaussian_log_likelihood(x_start, means=out["mean"], log_scales=0.5 * out["log_variance"])
         assert decoder_nll.shape == x_start.shape
         decoder_nll = mean_flat(decoder_nll) / np.log(2.0)
 
         # At the first timestep return the decoder NLL,
         # otherwise return KL(q(x_{t-1}|x_t,x_0) || p(x_{t-1}|x_t))
-        output = th.where((t == 0), decoder_nll, kl)
+        output = th.where((t == 0), decoder_nll, kl) # t==0 返回 decoder_nll, 否则返回 kl
         return {"output": output, "pred_xstart": out["pred_xstart"]}
 
     def training_losses(self, model, x_start, t, model_kwargs=None, noise=None):
@@ -748,7 +748,9 @@ class GaussianDiffusion:
             assert model_output.shape == target.shape == x_start.shape
             terms["mse"] = mean_flat((target - model_output) ** 2)
             if "vb" in terms:
-                terms["loss"] = terms["mse"] + terms["vb"]
+                terms["loss"] = terms["mse"] + terms["vb"] # 第二项为了学p(x_{t-1}| x_t)的方差项。第一项是学均值项。 注意 vb 项已经乘了 0.001，故主要还是mse项起作用
+                                                           # vb 与 mean /var 都有关，且 mse loss项也是从 KL 推导出的，按说只用 vb 即可。但是作者两项都用，且主要依赖mse项。
+                                                           # 按 paper，对于 vb 项，会 stop_grad 均值部分。但看上面代码，并没这样做
             else:
                 terms["loss"] = terms["mse"]
         else:
